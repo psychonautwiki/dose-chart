@@ -35,7 +35,7 @@ class SubstanceAPI {
 
     constructor() {
         this._apiDoseQuery = substanceName =>
-            `/api?query=%7Bsubstances(query%3A%22${substanceName}%22)%7Bname%20roas%7Bname%20dose%7Bunits%20threshold%20light%7Bmin%7Dcommon%7Bmin%7Dstrong%7Bmin%20max%7D%7D%7D%7D%7D`;
+            `https://api.psychonautwiki.org/?query=%7Bsubstances(query%3A%22${substanceName}%22)%7Bname%20roas%7Bname%20dose%7Bunits%20threshold%20light%7Bmin%7Dcommon%7Bmin%7Dstrong%7Bmin%20max%7D%7D%7D%7D%7D`;
     }
 
     _fetchDoseData(substanceName, cb: (response: DoseDTO) => void ) {
@@ -82,7 +82,7 @@ class DoseChart {
     private _dpi: number;
     private _scaleFactor: number;
     
-    constructor(chartMount: HTMLDivElement, { substanceAPI }: { substanceAPI: SubstanceAPI }) {
+    constructor(chartMount: HTMLTableRowElement, { substanceAPI }: { substanceAPI: SubstanceAPI }) {
         this._dpi = window.devicePixelRatio || 1;
         // this._scaleFactor = window.outerHeight / window.innerHeight;
         this._scaleFactor = this._dpi;
@@ -104,10 +104,8 @@ class DoseChart {
         outerLink.style.cursor = 'default';
 
         const canvas = document.createElement('canvas');
-        
-        canvas.className = 'dosechart';
+
         canvas.style.maxWidth = '100%';
-        // canvas.style.marginBottom = '-8px';
         
         outerLink.appendChild(canvas);
         chartMount.appendChild(outerLink);
@@ -117,6 +115,8 @@ class DoseChart {
 
         this._canvas = canvas;
         this._link = outerLink;
+
+        this._resizeCanvasIfNeeded();
 
         this._initChart();
     }
@@ -451,7 +451,6 @@ class DoseChart {
     }
 
     _renderWithData(roa: RoasItem) {
-        this._resizeCanvasIfNeeded();
         this._renderDoseLines(roa);
         this._attachMouseEvents();
     }
@@ -462,7 +461,7 @@ class DoseChart {
         const substanceAPI = new SubstanceAPI();
 
         (
-            Array.from(document.querySelectorAll('.dosechart')) as HTMLDivElement[]
+            Array.from(document.querySelectorAll('tr.dosechart')) as HTMLTableRowElement[]
         )
         .map(node => new DoseChart(node, { substanceAPI }));
     };

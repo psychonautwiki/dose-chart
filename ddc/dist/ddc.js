@@ -69,7 +69,7 @@ Strong.prototype.max;
 var SubstanceAPI = /** @class */ (function () {
     function SubstanceAPI() {
         this._apiDoseQuery = function (substanceName) {
-            return "/api?query=%7Bsubstances(query%3A%22" + substanceName + "%22)%7Bname%20roas%7Bname%20dose%7Bunits%20threshold%20light%7Bmin%7Dcommon%7Bmin%7Dstrong%7Bmin%20max%7D%7D%7D%7D%7D";
+            return "https://api.psychonautwiki.org/?query=%7Bsubstances(query%3A%22" + substanceName + "%22)%7Bname%20roas%7Bname%20dose%7Bunits%20threshold%20light%7Bmin%7Dcommon%7Bmin%7Dstrong%7Bmin%20max%7D%7D%7D%7D%7D";
         };
     }
     /**
@@ -133,15 +133,14 @@ var DoseChart = /** @class */ (function () {
         outerLink.style.cursor = 'default';
         /** @type {!HTMLCanvasElement} */
         var canvas = document.createElement('canvas');
-        canvas.className = 'dosechart';
         canvas.style.maxWidth = '100%';
-        // canvas.style.marginBottom = '-8px';
         outerLink.appendChild(canvas);
         chartMount.appendChild(outerLink);
         this._substanceName = /** @type {string} */ (chartMount.dataset['substance']);
         this._roa = String(chartMount.dataset['roa']).toLowerCase();
         this._canvas = canvas;
         this._link = outerLink;
+        this._resizeCanvasIfNeeded();
         this._initChart();
     }
     /**
@@ -470,7 +469,6 @@ var DoseChart = /** @class */ (function () {
      * @return {void}
      */
     function (roa) {
-        this._resizeCanvasIfNeeded();
         this._renderDoseLines(roa);
         this._attachMouseEvents();
     };
@@ -501,7 +499,7 @@ if (false) {
     var init = function () {
         /** @type {!SubstanceAPI} */
         var substanceAPI = new SubstanceAPI();
-        (/** @type {!Array<!HTMLDivElement>} */ (Array.from(document.querySelectorAll('.dosechart'))))
+        (/** @type {!Array<!HTMLTableRowElement>} */ (Array.from(document.querySelectorAll('tr.dosechart'))))
             .map(function (node) { return new DoseChart(node, { substanceAPI: substanceAPI }); });
     };
     if (document.readyState === "complete") {
