@@ -41,9 +41,9 @@ class SubstanceAPI {
     _fetchDoseData(substanceName, cb: (response: DoseDTO) => void ) {
         // uncomment the following code if you intend to debug and develop
 
-        // requestAnimationFrame(() =>
+        // setTimeout(() => {
         //     cb({"data":{"substances":[{"name":"LSD","roas":[{"dose":{"common":{"min":75},"light":{"min":25},"strong":{"min":150,"max":300},"threshold":15,"units":"µg"},"name":"sublingual"}]}]}})
-        // );
+        // }, 15);
 
         // return;
 
@@ -71,13 +71,21 @@ class SubstanceAPI {
 }
 
 class DoseChart {
-    private _canvas: HTMLCanvasElement;
-    private _link: HTMLAnchorElement;
-    private _substanceAPI: SubstanceAPI;
     private _roa: string;
     private _substanceName: string;
-    private _targetRect: { width: number, height: number };
+    private _roaData: RoasItem;
+
+    private _canvas: HTMLCanvasElement;
+    private _link: HTMLAnchorElement;
+
+    private _substanceAPI: SubstanceAPI;
     private _doseNamePos: [number, number, number, number, string][];
+    
+    private _targetRect: { width: number, height: number };
+    private _scaledTargetRect: DoseChart["_targetRect"];
+    private _scaledTargetRatio: number;
+
+    private _renderEpoch: number;
 
     private _dpi: number;
     private _scaleFactor: number;
@@ -92,11 +100,14 @@ class DoseChart {
             height: 81
         };
 
+        this._scaledTargetRect = this._targetRect;
+        this._scaledTargetRatio = 1;
+        this._renderEpoch = 0;
+
         this._doseNamePos = [];
 
         this._substanceAPI = substanceAPI;
 
-        chartMount.style.maxWidth = '250px';
         chartMount.style.backgroundColor = 'white';
         
         const outerLink = document.createElement('a');
@@ -116,9 +127,29 @@ class DoseChart {
         this._canvas = canvas;
         this._link = outerLink;
 
+        requestAnimationFrame(() => {
+            this._init();
+        });
+    }
+
+    _init() {
         this._resizeCanvasIfNeeded();
 
         this._initChart();
+
+        this._attachWindowEvents();
+    }
+
+    _attachWindowEvents() {
+        let timer: number;
+
+        window.addEventListener('resize', () => {
+            clearTimeout(timer);
+
+            timer = setTimeout(() => {
+                this._render();
+            }, 25);
+        });
     }
 
     _teardown() {
@@ -170,17 +201,32 @@ class DoseChart {
                     return;
                 }
 
-                this._renderWithData(roa);
+                this._roaData = roa;
+
+                this._render();
             }
         );
     }
 
     _resizeCanvasIfNeeded() {
-        this._canvas.width = this._targetRect.width * this._scaleFactor;
-        this._canvas.height = this._targetRect.height * this._scaleFactor;
+        this._canvas.width = this._scaledTargetRect.width * this._scaleFactor;
+        this._canvas.height = this._scaledTargetRect.height * this._scaleFactor;
     }
 
-    _renderDoseLines(roa: RoasItem) {
+    _establishScaledTargetRect() {
+        const canvasBCR = this._canvas.getBoundingClientRect();
+
+        const scaleRatio = canvasBCR.width / this._targetRect.width;
+
+        this._scaledTargetRatio = scaleRatio;
+
+        this._scaledTargetRect = {
+            width: this._targetRect.width * scaleRatio,
+            height: this._targetRect.height * scaleRatio
+        };
+    }
+
+    _renderChart() {
         const ctx = this._canvas.getContext('2d');
         /*
             #81F7F3 T L
@@ -195,17 +241,17 @@ class DoseChart {
         const outerPaddingRatio = 0.25;
         const lineMarginRatio = 0.2;
 
-        const lineLength = this._targetRect.width * (1 - outerPaddingRatio) / 3;
+        const lineLength = this._scaledTargetRect.width * (1 - outerPaddingRatio) / 3;
 
         const linePartLength = lineLength * (1 - lineMarginRatio);
         const lineMarginPartLength = lineLength * lineMarginRatio;
 
-        const lineOffset = this._targetRect.width * outerPaddingRatio / 2;
+        const lineOffset = this._scaledTargetRect.width * outerPaddingRatio / 2;
 
-        const rowHeight = (this._targetRect.height / 3);
+        const rowHeight = (this._scaledTargetRect.height / 3);
 
         const desiredBaseFontSize = 14;
-        const scaledFontSize = desiredBaseFontSize * this._scaleFactor;
+        const scaledFontSize = desiredBaseFontSize * this._scaleFactor * this._scaledTargetRatio;
 
         const targetFont = `${scaledFontSize}px Arial`;
 
@@ -216,14 +262,14 @@ class DoseChart {
                         0,
                         'threshold',
                         '#81F7F3',
-                        roa['dose']['threshold'],
+                        this._roaData['dose']['threshold'],
                         '/wiki/Dosage_classification#Threshold'
                     ],
                     [
                         2,
                         'common',
                         '#FFFF00',
-                        roa['dose']['common'] && roa['dose']['common']['min'],
+                        this._roaData['dose']['common'] && this._roaData['dose']['common']['min'],
                         '/wiki/Dosage_classification#Common'
                     ],
                     [
@@ -231,7 +277,7 @@ class DoseChart {
                         'heavy',
                         '#FF0000',
                         // heavy
-                        roa['dose']['strong'] && roa['dose']['strong']['max'],
+                        this._roaData['dose']['strong'] && this._roaData['dose']['strong']['max'],
                         '/wiki/Dosage_classification#Heavy'
                     ]
                 ],
@@ -246,14 +292,14 @@ class DoseChart {
                         1,
                         'light',
                         '#90ee90',
-                        roa['dose']['light'] && roa['dose']['light']['min'],
+                        this._roaData['dose']['light'] && this._roaData['dose']['light']['min'],
                         '/wiki/Dosage_classification#Light'
                     ],
                     [
                         3,
                         'strong',
                         '#FFFF00',
-                        roa['dose']['strong'] && roa['dose']['strong']['min'],
+                        this._roaData['dose']['strong'] && this._roaData['dose']['strong']['min'],
                         '/wiki/Dosage_classification#Strong'
                     ]
                 ],
@@ -275,8 +321,7 @@ class DoseChart {
         );
 
         const doseRenderPos = [];
-
-        // ctx.translate(0, -2.5 * this._scaleFactor);
+        this._doseNamePos = [];
 
         ctx.save();
 
@@ -295,7 +340,7 @@ class DoseChart {
 
                 ctx.fillStyle   = doseColor;
                 ctx.strokeStyle = doseColor;
-                ctx.lineWidth   = 5 * this._scaleFactor * 0.5;
+                ctx.lineWidth   = 5 * this._scaleFactor * this._scaledTargetRatio * 0.5;
 
                 ctx.beginPath();
 
@@ -362,7 +407,7 @@ class DoseChart {
                     ctx.font = `italic ${targetFont}`;
 
                     ctx.fillText(
-                        roa['dose']['units'],
+                        this._roaData['dose']['units'],
                         refOffset + doseWidth.width * 1.35 + (rowHeight * 1.2 + linePartLength * 0.66 * id) * this._scaleFactor,
                         (rowHeight + rowHeight * 0.65) * this._scaleFactor
                     );
@@ -406,7 +451,7 @@ class DoseChart {
         this._link.style.cursor = 'pointer';
     }
 
-    _attachMouseEvents() {
+    _attachCanvasMouseEvents() {
         if (this._doseNamePos.length === 0) {
             return;
         }
@@ -450,9 +495,25 @@ class DoseChart {
         });
     }
 
-    _renderWithData(roa: RoasItem) {
-        this._renderDoseLines(roa);
-        this._attachMouseEvents();
+    _render() {
+        const scaleRatio = this._scaledTargetRatio;
+
+        this._establishScaledTargetRect();
+
+        const isFirstEpoch = ++this._renderEpoch === 1;
+        const hasScaleRatioChanged = scaleRatio !== this._scaledTargetRatio;
+
+        if (!isFirstEpoch && !hasScaleRatioChanged) {
+            return;
+        }
+
+        this._resizeCanvasIfNeeded();
+
+        this._renderChart();
+
+        if (isFirstEpoch) {
+            this._attachCanvasMouseEvents();
+        }
     }
 }
 

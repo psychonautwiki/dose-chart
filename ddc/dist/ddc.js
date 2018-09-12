@@ -84,9 +84,9 @@ var SubstanceAPI = /** @class */ (function () {
      */
     function (substanceName, cb) {
         // uncomment the following code if you intend to debug and develop
-        // requestAnimationFrame(() =>
+        // setTimeout(() => {
         //     cb({"data":{"substances":[{"name":"LSD","roas":[{"dose":{"common":{"min":75},"light":{"min":25},"strong":{"min":150,"max":300},"threshold":15,"units":"µg"},"name":"sublingual"}]}]}})
-        // );
+        // }, 15);
         // return;
         try {
             /** @type {!XMLHttpRequest} */
@@ -117,6 +117,7 @@ if (false) {
 var DoseChart = /** @class */ (function () {
     function DoseChart(chartMount, _a) {
         var substanceAPI = _a.substanceAPI;
+        var _this = this;
         this._dpi = window.devicePixelRatio || 1;
         // this._scaleFactor = window.outerHeight / window.innerHeight;
         this._scaleFactor = this._dpi;
@@ -124,9 +125,11 @@ var DoseChart = /** @class */ (function () {
             width: 250,
             height: 81
         };
+        this._scaledTargetRect = this._targetRect;
+        this._scaledTargetRatio = 1;
+        this._renderEpoch = 0;
         this._doseNamePos = [];
         this._substanceAPI = substanceAPI;
-        chartMount.style.maxWidth = '250px';
         chartMount.style.backgroundColor = 'white';
         /** @type {!HTMLAnchorElement} */
         var outerLink = document.createElement('a');
@@ -140,9 +143,38 @@ var DoseChart = /** @class */ (function () {
         this._roa = String(chartMount.dataset['roa']).toLowerCase();
         this._canvas = canvas;
         this._link = outerLink;
+        requestAnimationFrame(function () {
+            _this._init();
+        });
+    }
+    /**
+     * @return {void}
+     */
+    DoseChart.prototype._init = /**
+     * @return {void}
+     */
+    function () {
         this._resizeCanvasIfNeeded();
         this._initChart();
-    }
+        this._attachWindowEvents();
+    };
+    /**
+     * @return {void}
+     */
+    DoseChart.prototype._attachWindowEvents = /**
+     * @return {void}
+     */
+    function () {
+        var _this = this;
+        /** @type {number} */
+        var timer;
+        window.addEventListener('resize', function () {
+            clearTimeout(timer);
+            timer = setTimeout(function () {
+                _this._render();
+            }, 25);
+        });
+    };
     /**
      * @return {void}
      */
@@ -194,7 +226,8 @@ var DoseChart = /** @class */ (function () {
                 _this._teardown();
                 return;
             }
-            _this._renderWithData(roa);
+            _this._roaData = roa;
+            _this._render();
         });
     };
     /**
@@ -204,18 +237,33 @@ var DoseChart = /** @class */ (function () {
      * @return {void}
      */
     function () {
-        this._canvas.width = this._targetRect.width * this._scaleFactor;
-        this._canvas.height = this._targetRect.height * this._scaleFactor;
+        this._canvas.width = this._scaledTargetRect.width * this._scaleFactor;
+        this._canvas.height = this._scaledTargetRect.height * this._scaleFactor;
     };
     /**
-     * @param {!RoasItem} roa
      * @return {void}
      */
-    DoseChart.prototype._renderDoseLines = /**
-     * @param {!RoasItem} roa
+    DoseChart.prototype._establishScaledTargetRect = /**
      * @return {void}
      */
-    function (roa) {
+    function () {
+        /** @type {(!ClientRect|!DOMRect)} */
+        var canvasBCR = this._canvas.getBoundingClientRect();
+        /** @type {number} */
+        var scaleRatio = canvasBCR.width / this._targetRect.width;
+        this._scaledTargetRatio = scaleRatio;
+        this._scaledTargetRect = {
+            width: this._targetRect.width * scaleRatio,
+            height: this._targetRect.height * scaleRatio
+        };
+    };
+    /**
+     * @return {void}
+     */
+    DoseChart.prototype._renderChart = /**
+     * @return {void}
+     */
+    function () {
         var _this = this;
         /** @type {!CanvasRenderingContext2D} */
         var ctx = this._canvas.getContext('2d');
@@ -224,19 +272,19 @@ var DoseChart = /** @class */ (function () {
         /** @type {number} */
         var lineMarginRatio = 0.2;
         /** @type {number} */
-        var lineLength = this._targetRect.width * (1 - outerPaddingRatio) / 3;
+        var lineLength = this._scaledTargetRect.width * (1 - outerPaddingRatio) / 3;
         /** @type {number} */
         var linePartLength = lineLength * (1 - lineMarginRatio);
         /** @type {number} */
         var lineMarginPartLength = lineLength * lineMarginRatio;
         /** @type {number} */
-        var lineOffset = this._targetRect.width * outerPaddingRatio / 2;
+        var lineOffset = this._scaledTargetRect.width * outerPaddingRatio / 2;
         /** @type {number} */
-        var rowHeight = (this._targetRect.height / 3);
+        var rowHeight = (this._scaledTargetRect.height / 3);
         /** @type {number} */
         var desiredBaseFontSize = 14;
         /** @type {number} */
-        var scaledFontSize = desiredBaseFontSize * this._scaleFactor;
+        var scaledFontSize = desiredBaseFontSize * this._scaleFactor * this._scaledTargetRatio;
         /** @type {string} */
         var targetFont = scaledFontSize + "px Arial";
         /** @type {!Array<!Array<!Array<(!Array<?>|!Array<number>)>>>} */
@@ -247,14 +295,14 @@ var DoseChart = /** @class */ (function () {
                         0,
                         'threshold',
                         '#81F7F3',
-                        roa['dose']['threshold'],
+                        this._roaData['dose']['threshold'],
                         '/wiki/Dosage_classification#Threshold'
                     ],
                     [
                         2,
                         'common',
                         '#FFFF00',
-                        roa['dose']['common'] && roa['dose']['common']['min'],
+                        this._roaData['dose']['common'] && this._roaData['dose']['common']['min'],
                         '/wiki/Dosage_classification#Common'
                     ],
                     [
@@ -262,7 +310,7 @@ var DoseChart = /** @class */ (function () {
                         'heavy',
                         '#FF0000',
                         // heavy
-                        roa['dose']['strong'] && roa['dose']['strong']['max'],
+                        this._roaData['dose']['strong'] && this._roaData['dose']['strong']['max'],
                         '/wiki/Dosage_classification#Heavy'
                     ]
                 ],
@@ -277,14 +325,14 @@ var DoseChart = /** @class */ (function () {
                         1,
                         'light',
                         '#90ee90',
-                        roa['dose']['light'] && roa['dose']['light']['min'],
+                        this._roaData['dose']['light'] && this._roaData['dose']['light']['min'],
                         '/wiki/Dosage_classification#Light'
                     ],
                     [
                         3,
                         'strong',
                         '#FFFF00',
-                        roa['dose']['strong'] && roa['dose']['strong']['min'],
+                        this._roaData['dose']['strong'] && this._roaData['dose']['strong']['min'],
                         '/wiki/Dosage_classification#Strong'
                     ]
                 ],
@@ -306,7 +354,7 @@ var DoseChart = /** @class */ (function () {
         });
         /** @type {!Array<?>} */
         var doseRenderPos = [];
-        // ctx.translate(0, -2.5 * this._scaleFactor);
+        this._doseNamePos = [];
         ctx.save();
         lineSpec.forEach(function (line, k) {
             return line.forEach(function (lineNode) {
@@ -327,7 +375,7 @@ var DoseChart = /** @class */ (function () {
                 var _a = /** @type {!Array<?>} */ (coords), X_1 = _a[0], X_2 = _a[1], Y_1 = _a[2];
                 ctx.fillStyle = doseColor;
                 ctx.strokeStyle = doseColor;
-                ctx.lineWidth = 5 * _this._scaleFactor * 0.5;
+                ctx.lineWidth = 5 * _this._scaleFactor * _this._scaledTargetRatio * 0.5;
                 ctx.beginPath();
                 ctx.moveTo(X_1, Y_1);
                 ctx.lineTo(X_2, Y_1);
@@ -371,7 +419,7 @@ var DoseChart = /** @class */ (function () {
                 if (id === 4) {
                     ctx.save();
                     ctx.font = "italic " + targetFont;
-                    ctx.fillText(roa['dose']['units'], refOffset + doseWidth.width * 1.35 + (rowHeight * 1.2 + linePartLength * 0.66 * id) * _this._scaleFactor, (rowHeight + rowHeight * 0.65) * _this._scaleFactor);
+                    ctx.fillText(_this._roaData['dose']['units'], refOffset + doseWidth.width * 1.35 + (rowHeight * 1.2 + linePartLength * 0.66 * id) * _this._scaleFactor, (rowHeight + rowHeight * 0.65) * _this._scaleFactor);
                     ctx.restore();
                 }
             });
@@ -414,7 +462,7 @@ var DoseChart = /** @class */ (function () {
     /**
      * @return {void}
      */
-    DoseChart.prototype._attachMouseEvents = /**
+    DoseChart.prototype._attachCanvasMouseEvents = /**
      * @return {void}
      */
     function () {
@@ -461,34 +509,53 @@ var DoseChart = /** @class */ (function () {
         });
     };
     /**
-     * @param {!RoasItem} roa
      * @return {void}
      */
-    DoseChart.prototype._renderWithData = /**
-     * @param {!RoasItem} roa
+    DoseChart.prototype._render = /**
      * @return {void}
      */
-    function (roa) {
-        this._renderDoseLines(roa);
-        this._attachMouseEvents();
+    function () {
+        /** @type {number} */
+        var scaleRatio = this._scaledTargetRatio;
+        this._establishScaledTargetRect();
+        /** @type {boolean} */
+        var isFirstEpoch = ++this._renderEpoch === 1;
+        /** @type {boolean} */
+        var hasScaleRatioChanged = scaleRatio !== this._scaledTargetRatio;
+        if (!isFirstEpoch && !hasScaleRatioChanged) {
+            return;
+        }
+        this._resizeCanvasIfNeeded();
+        this._renderChart();
+        if (isFirstEpoch) {
+            this._attachCanvasMouseEvents();
+        }
     };
     return DoseChart;
 }());
 if (false) {
+    /** @type {string} */
+    DoseChart.prototype._roa;
+    /** @type {string} */
+    DoseChart.prototype._substanceName;
+    /** @type {!RoasItem} */
+    DoseChart.prototype._roaData;
     /** @type {!HTMLCanvasElement} */
     DoseChart.prototype._canvas;
     /** @type {!HTMLAnchorElement} */
     DoseChart.prototype._link;
     /** @type {!SubstanceAPI} */
     DoseChart.prototype._substanceAPI;
-    /** @type {string} */
-    DoseChart.prototype._roa;
-    /** @type {string} */
-    DoseChart.prototype._substanceName;
-    /** @type {{width: number, height: number}} */
-    DoseChart.prototype._targetRect;
     /** @type {!Array<!Array<?>>} */
     DoseChart.prototype._doseNamePos;
+    /** @type {{width: number, height: number}} */
+    DoseChart.prototype._targetRect;
+    /** @type {{width: number, height: number}} */
+    DoseChart.prototype._scaledTargetRect;
+    /** @type {number} */
+    DoseChart.prototype._scaledTargetRatio;
+    /** @type {number} */
+    DoseChart.prototype._renderEpoch;
     /** @type {number} */
     DoseChart.prototype._dpi;
     /** @type {number} */
