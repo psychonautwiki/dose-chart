@@ -569,7 +569,7 @@ if (false) {
         (/** @type {!Array<!HTMLTableRowElement>} */ (Array.from(document.querySelectorAll('tr.dosechart'))))
             .map(function (node) { return new DoseChart(node, { substanceAPI: substanceAPI }); });
     };
-    if (document.readyState === "complete") {
+    if (document.readyState !== "loading") {
         init();
     }
     else {

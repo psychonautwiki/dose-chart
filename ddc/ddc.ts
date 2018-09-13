@@ -527,7 +527,7 @@ class DoseChart {
         .map(node => new DoseChart(node, { substanceAPI }));
     };
 
-    if (document.readyState === "complete") {
+    if (document.readyState !== "loading") {
         init();
     } else {
         window.addEventListener('DOMContentLoaded', init);
